@@ -1,7 +1,9 @@
 ﻿using System;
 using RedditSharp;
+using RedditSharp.Things;
 using Microsoft.Azure.KeyVault;
 using Microsoft.Azure.Services.AppAuthentication;
+using System.Threading;
 
 namespace Memebot.Sandbox
 {
@@ -20,6 +22,50 @@ namespace Memebot.Sandbox
 
             var webAgent = new BotWebAgent(redditUsername, redditPassword, redditClientID, redditClientSecret, redditRedirectURI);
             var reddit = new Reddit(webAgent, false);
+
+            var subreddit = reddit.GetSubredditAsync("/r/prequelmemes").Result;
+
+            // get top 5 posts of the day
+            var topFivePosts = subreddit.GetTop(FromTime.Day);
+            
+            // iterate through the top 5 posts
+            var topFivePostsEnumerator = topFivePosts.GetEnumerator();
+
+            CancellationTokenSource source = new CancellationTokenSource();
+
+            int numMemes = 0;
+            while(topFivePostsEnumerator.MoveNext(source.Token).Result)
+            {
+                var currentPost = topFivePostsEnumerator.Current;
+
+                var imageUrl = currentPost.Url.AbsoluteUri;
+
+                var fileExtension = GetFileExtension(imageUrl);
+
+                if( fileExtension == "jpg" ||
+                    fileExtension == "jpeg" ||
+                    fileExtension == "gif" ||
+                    fileExtension == "png")
+                {
+                    var wc = new System.Net.WebClient();
+                    wc.DownloadFile( topFivePostsEnumerator.Current.Url, $"download.{fileExtension}");
+                    numMemes++;
+                }
+
+                if(numMemes == 5)
+                {
+                    source.Cancel();
+                    break;
+                }
+            }
+
+            ;
+        }
+
+        public static string GetFileExtension(string fileUri)
+        {
+            int lastDot = fileUri.LastIndexOf('.');
+            return fileUri.Substring(lastDot+1);
         }
     }
 
@@ -29,7 +75,7 @@ namespace Memebot.Sandbox
         /// Key Vault client that can get keys and secrets
         /// </summary>
         /// <value></value>
-        public static KeyVaultClient keyVaultClient { get; private set; }
+        private static KeyVaultClient keyVaultClient { get; set; }
 
         /// <summary>
         /// Logs into Azure KeyVault and makes keyVaultClient active
