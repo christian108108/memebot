@@ -29,24 +29,53 @@ namespace Memebot.Sandbox
                 "/r/bikinibottomtwitter"
             };
 
-            CollectTopMemes(2, subredditList);
+            // collect memes and store in Azure Queue Storage
+            // CollectTopMemes(2, subredditList);
+
+            // post memes from Azure Queue Storage into Slack
+            KeyVaultHelper.LogIntoKeyVault();
+            var slackWebhookUrl = KeyVaultHelper.GetSecret("https://memebot-keyvault.vault.azure.net/secrets/slack-webhook-url/");
+            PostToSlack(2, slackWebhookUrl);
+
 
             ;
         }
 
         /// <summary>
-        /// Will post meme to a Slack webhook
+        /// Will take meme from Azure Queue Storage and post to Slack
         /// </summary>
-        /// <param name="memeUrl">full url of the meme</param>
         /// <param name="webhookUrl">webhook url from Slack</param>
-        /// <returns>Returns true if post was sucessful, false if not</returns>
-        public static bool PostToSlack(string memeUrl, string webhookUrl)
+        /// <param name="numMemes">number of memes from the stack to post</param>
+        public static void PostToSlack(int numMemes, string webhookUrl)
         {
-            var jsonPayload = JsonConvert.SerializeObject(new {text = memeUrl});
+            // log into Key Vault and grab storage connection string
+            KeyVaultHelper.LogIntoKeyVault();
+            string storageConnectionString = KeyVaultHelper.GetSecret("https://memebot-keyvault.vault.azure.net/secrets/storage-connection-string/");
 
-            var stringContent = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+            // accessing Azure Queue Storage
+            var storageAccount = CloudStorageAccount.Parse(storageConnectionString);
+            var queueClient = storageAccount.CreateCloudQueueClient();
+            var queue = queueClient.GetQueueReference("memes");
 
-            return client.PostAsync(webhookUrl, stringContent).Result.IsSuccessStatusCode;
+            // cycle through number of memes to post from the queue
+            for(int i = 0; i < numMemes; i++)
+            {
+                var message = queue.GetMessage();
+
+                // delete message from the Azure queue
+                if(message != null){ queue.DeleteMessage(message); }
+
+                var memeUrl = message.AsString;
+
+                if(String.IsNullOrWhiteSpace(memeUrl)) { break; }
+
+                var jsonPayload = JsonConvert.SerializeObject(new {text = memeUrl});
+
+                var stringContent = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+
+                client.PostAsync(webhookUrl, stringContent).Wait();
+            }
+
         }
 
         /// <summary>
@@ -65,7 +94,6 @@ namespace Memebot.Sandbox
             string redditClientID = KeyVaultHelper.GetSecret("https://memebot-keyvault.vault.azure.net/secrets/reddit-client-id/");
             string redditClientSecret = KeyVaultHelper.GetSecret("https://memebot-keyvault.vault.azure.net/secrets/reddit-secret/");
             string redditRedirectURI = "https://memebot-hackucf.azurewebsites.net/";
-            string slackWebhookUrl = KeyVaultHelper.GetSecret("https://memebot-keyvault.vault.azure.net/secrets/slack-webhook-url/");
             #endregion
 
             var webAgent = new BotWebAgent(redditUsername, redditPassword, redditClientID, redditClientSecret, redditRedirectURI);
