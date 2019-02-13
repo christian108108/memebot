@@ -4,6 +4,7 @@ using RedditSharp.Things;
 using Microsoft.Azure.KeyVault;
 using Microsoft.Azure.Services.AppAuthentication;
 using System.Threading;
+using System.Collections.Generic;
 
 namespace Memebot.Sandbox
 {
@@ -13,50 +14,46 @@ namespace Memebot.Sandbox
         {
             KeyVaultHelper.LogIntoKeyVault();
 
-
+            #region Secrets
             string redditUsername = KeyVaultHelper.GetSecret("https://memebot-keyvault.vault.azure.net/secrets/reddit-username/");
             string redditPassword = KeyVaultHelper.GetSecret("https://memebot-keyvault.vault.azure.net/secrets/reddit-password/");
             string redditClientID = KeyVaultHelper.GetSecret("https://memebot-keyvault.vault.azure.net/secrets/reddit-client-id/");
             string redditClientSecret = KeyVaultHelper.GetSecret("https://memebot-keyvault.vault.azure.net/secrets/reddit-secret/");
             string redditRedirectURI = "https://memebot-hackucf.azurewebsites.net/";
+            #endregion
 
             var webAgent = new BotWebAgent(redditUsername, redditPassword, redditClientID, redditClientSecret, redditRedirectURI);
             var reddit = new Reddit(webAgent, false);
 
-            var subreddit = reddit.GetSubredditAsync("/r/prequelmemes").Result;
-
-            // get top 5 posts of the day
-            var topFivePosts = subreddit.GetTop(FromTime.Day);
-            
-            // iterate through the top 5 posts
-            var topFivePostsEnumerator = topFivePosts.GetEnumerator();
-
-            CancellationTokenSource source = new CancellationTokenSource();
-
-            int numMemes = 0;
-            while(topFivePostsEnumerator.MoveNext(source.Token).Result)
+            var subredditList = new List<string>()
             {
-                var currentPost = topFivePostsEnumerator.Current;
+                "/r/prequelmemes",
+                "/r/4chan",
+                "/r/animemes"
+            };
 
-                var imageUrl = currentPost.Url.AbsoluteUri;
 
-                var fileExtension = GetFileExtension(imageUrl);
+            foreach(var subredditName in subredditList)
+            {
+                var subreddit = reddit.GetSubredditAsync(subredditName).Result;
 
-                if( fileExtension == "jpg" ||
-                    fileExtension == "jpeg" ||
-                    fileExtension == "gif" ||
-                    fileExtension == "png")
+                // get top 5 posts of the day
+                var topFivePosts = subreddit.GetTop(FromTime.Day, 5);
+
+                // iterate through the top 5 posts
+                var topFivePostsEnumerator = topFivePosts.GetEnumerator();
+
+                CancellationTokenSource source = new CancellationTokenSource();
+
+                while(topFivePostsEnumerator.MoveNext(source.Token).Result)
                 {
-                    var wc = new System.Net.WebClient();
-                    wc.DownloadFile( topFivePostsEnumerator.Current.Url, $"download.{fileExtension}");
-                    numMemes++;
+                    var currentPost = topFivePostsEnumerator.Current;
+
+                    var imageUrl = "https://www.reddit.com" + currentPost.Permalink.OriginalString;
+
+                    ;
                 }
 
-                if(numMemes == 5)
-                {
-                    source.Cancel();
-                    break;
-                }
             }
 
             ;
