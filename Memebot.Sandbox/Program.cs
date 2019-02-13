@@ -7,19 +7,61 @@ using System.Collections.Generic;
 using System.Net.Http;
 using Newtonsoft.Json;
 using System.Text;
+using System;
+// using Microsoft.Azure.Cosmos;
+using Microsoft.WindowsAzure.Storage;
+using Microsoft.WindowsAzure.Storage.Queue;
+using System.Threading.Tasks;
 
 namespace Memebot.Sandbox
 {
     class Program
     {
-
         private static readonly HttpClient client = new HttpClient();
         
         static void Main(string[] args)
         {
+            // spiciest memes around
+            string[] subredditList = 
+            {
+                "/r/prequelmemes",
+                "/r/4chan",
+                "/r/animemes",
+                "/r/blackpeopletwitter",
+                "/r/bikinibottomtwitter"
+            };
+
+            CollectTopMemes(2, subredditList);
+
+            ;
+        }
+
+        /// <summary>
+        /// Will post meme to a Slack webhook
+        /// </summary>
+        /// <param name="memeUrl">full url of the meme</param>
+        /// <param name="webhookUrl">webhook url from Slack</param>
+        /// <returns>Returns true if post was sucessful, false if not</returns>
+        public static bool PostToSlack(string memeUrl, string webhookUrl)
+        {
+            var jsonPayload = JsonConvert.SerializeObject(new {text = memeUrl});
+
+            var stringContent = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+
+            return client.PostAsync(webhookUrl, stringContent).Result.IsSuccessStatusCode;
+        }
+
+        /// <summary>
+        /// Posts top x memes from given each subreddit and stores them in Azure Queue
+        /// </summary>
+        /// <param name="numMemesPerSubreddit">Number of top memes per subreddit to post</param>
+        /// <param name="subredditList">List of strings of subreddit names like /r/subreddit</param>
+        public static void CollectTopMemes(int numMemesPerSubreddit, IEnumerable<string> subredditList)
+        {
             KeyVaultHelper.LogIntoKeyVault();
 
             #region Secrets
+            string storageConnectionString = KeyVaultHelper.GetSecret("https://memebot-keyvault.vault.azure.net/secrets/storage-connection-string/");
             string redditUsername = KeyVaultHelper.GetSecret("https://memebot-keyvault.vault.azure.net/secrets/reddit-username/");
             string redditPassword = KeyVaultHelper.GetSecret("https://memebot-keyvault.vault.azure.net/secrets/reddit-password/");
             string redditClientID = KeyVaultHelper.GetSecret("https://memebot-keyvault.vault.azure.net/secrets/reddit-client-id/");
@@ -31,58 +73,43 @@ namespace Memebot.Sandbox
             var webAgent = new BotWebAgent(redditUsername, redditPassword, redditClientID, redditClientSecret, redditRedirectURI);
             var reddit = new Reddit(webAgent, false);
 
-            // spiciest memes around
-            var subredditList = new List<string>()
-            {
-                "/r/prequelmemes",
-                "/r/4chan",
-                "/r/animemes"
-            };
+            // accessing Azure Queue Storage
+            var storageAccount = CloudStorageAccount.Parse(storageConnectionString);
+            var queueClient = storageAccount.CreateCloudQueueClient();
+            var queue = queueClient.GetQueueReference("memes");
 
             // go through each subreddit in the list
             foreach(var subredditName in subredditList)
             {
-                var subreddit = reddit.GetSubredditAsync(subredditName).Result;
-
-                // get top 2 posts of the day
-                var topFivePosts = subreddit.GetTop(FromTime.Day, 2);
-
-                // iterate through the top 2 posts
-                var topFivePostsEnumerator = topFivePosts.GetEnumerator();
-
-                CancellationTokenSource source = new CancellationTokenSource();
-
-                while(topFivePostsEnumerator.MoveNext(source.Token).Result)
+                try
                 {
-                    var currentPost = topFivePostsEnumerator.Current;
+                    var subreddit = reddit.GetSubredditAsync(subredditName).Result;
 
-                    // get full URL for the reddit content
-                    var imageUrl = currentPost.Url.AbsoluteUri;
+                    // get top posts of the day
+                    var topPosts = subreddit.GetTop(FromTime.Day, numMemesPerSubreddit);
 
-                    PostMeme(imageUrl, slackWebhookUrl);
-                    ;
+                    // iterate through the top posts
+                    var topPostsEnumerator = topPosts.GetEnumerator();
+                    CancellationTokenSource source = new CancellationTokenSource();
+
+                    while(topPostsEnumerator.MoveNext(source.Token).Result)
+                    {
+                        var currentPost = topPostsEnumerator.Current;
+
+                        // get full URL for the reddit content
+                        var imageUrl = currentPost.Url.AbsoluteUri;
+
+                        // create message and adds to queue
+                        var message = new CloudQueueMessage(imageUrl, false);
+                        queue.AddMessage(message);
+                    }
                 }
-
+                catch
+                {
+                    Console.WriteLine("Could not find subreddit");
+                }
             }
-
-            ;
         }
-
-        /// <summary>
-        /// Will post meme to a Slack webhook
-        /// </summary>
-        /// <param name="memeUrl">full url of the meme</param>
-        /// <param name="webhookUrl">webhook url from Slack</param>
-        /// <returns></returns>
-        public static bool PostMeme(string memeUrl, string webhookUrl)
-        {
-            var jsonPayload = JsonConvert.SerializeObject(new {text = memeUrl});
-
-            var stringContent = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
-
-            return client.PostAsync(webhookUrl, stringContent).Result.IsSuccessStatusCode;
-        }
-
     }
 
     public class KeyVaultHelper
@@ -112,7 +139,14 @@ namespace Memebot.Sandbox
         /// <returns>string value of secret</returns>
         public static string GetSecret(string secretIdentifier)
         {
-            return keyVaultClient.GetSecretAsync(secretIdentifier).Result.Value;
+            try
+            {
+                return keyVaultClient.GetSecretAsync(secretIdentifier).Result.Value;
+            }
+            catch
+            {
+                throw new UnauthorizedAccessException("Please log into Azure CLI and try again. Try typing command 'az login'");
+            }
         }
     }
 }
