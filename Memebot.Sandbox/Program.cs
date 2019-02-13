@@ -8,10 +8,8 @@ using System.Net.Http;
 using Newtonsoft.Json;
 using System.Text;
 using System;
-// using Microsoft.Azure.Cosmos;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Queue;
-using System.Threading.Tasks;
 
 namespace Memebot.Sandbox
 {
