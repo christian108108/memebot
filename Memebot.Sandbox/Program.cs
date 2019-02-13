@@ -1,12 +1,10 @@
-﻿using System;
-using RedditSharp;
+﻿using RedditSharp;
 using RedditSharp.Things;
 using Microsoft.Azure.KeyVault;
 using Microsoft.Azure.Services.AppAuthentication;
 using System.Threading;
 using System.Collections.Generic;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using Newtonsoft.Json;
 using System.Text;
 
@@ -58,8 +56,8 @@ namespace Memebot.Sandbox
                 {
                     var currentPost = topFivePostsEnumerator.Current;
 
-                    // get full URL for the reddit post
-                    var imageUrl = "https://www.reddit.com" + currentPost.Permalink.OriginalString;
+                    // get full URL for the reddit content
+                    var imageUrl = currentPost.Url.AbsoluteUri;
 
                     PostMeme(imageUrl, slackWebhookUrl);
                     ;
