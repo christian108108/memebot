@@ -4,7 +4,7 @@ using Microsoft.Azure.Services.AppAuthentication;
 
 namespace Memebot.Library
 {
-    public class KeyVaultHelper
+    public static class KeyVaultHelper
     {
         /// <summary>
         /// Key Vault client that can get keys and secrets
