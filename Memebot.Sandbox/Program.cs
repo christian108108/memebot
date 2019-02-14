@@ -13,7 +13,7 @@ namespace Memebot.Sandbox
                 "/r/4chan",
                 "/r/animemes",
                 "/r/blackpeopletwitter",
-                "/r/bikinibottomtwitter"
+                "/r/bikinibottomtwitter",
             };
 
             // log into KeyVault and get secrets
@@ -28,7 +28,7 @@ namespace Memebot.Sandbox
 
 
             // post memes from Azure Queue Storage into Slack
-            Library.Memebot.PostToSlackFromQueue(2, slackWebhookUrl, storageConnectionString);
+            // Library.Memebot.PostToSlackFromQueue(2, slackWebhookUrl, storageConnectionString);
 
             ;
         }
