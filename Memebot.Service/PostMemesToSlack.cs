@@ -9,7 +9,7 @@ namespace Memebot.PostMemes
     public static class PostMemesToSlack
     {
         [FunctionName("PostMemesToSlack")]
-        public static void Run([TimerTrigger("0 0 */2 * * *")]TimerInfo myTimer, ILogger log)
+        public static void Run([TimerTrigger("0 0 */4 * * *")]TimerInfo myTimer, ILogger log)
         {
             // log into KeyVault and get secrets
             KeyVaultHelper.LogIntoKeyVault();
