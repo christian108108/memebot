@@ -15,5 +15,8 @@
     <PackageReference Include="RedditSharp" Version="2.0.0-CI00075" />
     <PackageReference Include="SlackAPI" Version="1.0.7" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Memebot.Library\Memebot.Library.csproj" />
+  </ItemGroup>
 
 </Project>
