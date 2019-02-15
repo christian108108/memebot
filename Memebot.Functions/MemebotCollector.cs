@@ -17,7 +17,6 @@ namespace Memebot.Functions
                 "/r/prequelmemes",
                 "/r/4chan",
                 "/r/animemes",
-                "/r/blackpeopletwitter",
                 "/r/bikinibottomtwitter",
             };
 
